@@ -1,14 +1,11 @@
 package com.cgs.netty.zero.copy;
 
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.net.SocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
-import sun.net.InetAddressCachePolicy;
 
 /**
  * 零拷貝
@@ -21,7 +18,6 @@ public class NioServer {
 	public static void main(String[] args) throws Exception {
 		
 		InetSocketAddress inetAddr=new InetSocketAddress(8899);
-		
 		ServerSocketChannel serverSocketChannel= ServerSocketChannel.open();
 		// Retrieves a server socket associated with this channel.
 		ServerSocket serverSocket=serverSocketChannel.socket();
@@ -47,7 +43,7 @@ public class NioServer {
 			//获取到的SocketChannel一定是阻塞模式的
 			//值得深究
 			SocketChannel socketChannel=serverSocketChannel.accept();
-//            socketChannel.configureBlocking(true);//默认就是阻塞的
+            socketChannel.configureBlocking(true);//默认就是阻塞的
 			int readCount=0;
 			
 			while(-1!=readCount) {
