@@ -10,12 +10,12 @@ public class NioClient {
 	
 	public static void main(String[] args) throws Exception{
 		SocketChannel socketChannel=SocketChannel.open();
-		InetSocketAddress inetAddr=new InetSocketAddress("localhost",8899);
+		InetSocketAddress inetAddr=new InetSocketAddress("localhost",7809);
 		socketChannel.connect(inetAddr);
 		
 
 		socketChannel.configureBlocking(true);
-		String filePath="D:\\GitHub\\package\\GitHubDesktopSetup.exe";
+		String filePath="D:\\DockerToolBox\\Docker Toolbox\\boot2docker.iso";
 		
 		//获取文件通道
 		FileChannel fileChannel=new FileInputStream(filePath).getChannel();

@@ -17,7 +17,7 @@ public class NioServer {
 	
 	public static void main(String[] args) throws Exception {
 		
-		InetSocketAddress inetAddr=new InetSocketAddress(8899);
+		InetSocketAddress inetAddr=new InetSocketAddress(7809);
 		ServerSocketChannel serverSocketChannel= ServerSocketChannel.open();
 		// Retrieves a server socket associated with this channel.
 		ServerSocket serverSocket=serverSocketChannel.socket();

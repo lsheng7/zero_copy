@@ -1,0 +1,681 @@
+
+JDK->Future
+package java.util.concurrent;
+
+/**
+ //Future代表异步执行的过
+ * A {@code Future} represents the result of an asynchronous
+ //提供了若干个方法检查计算是不是完成了、去等待它的完成 并从获取计算的结果
+ * computation.  Methods are provided to check if the computation is
+ * complete, to wait for its completion, and to retrieve the result of
+ //当任务已经完成 只可以通过get方法获取到这个执行结果 如果必要的话将会阻塞
+ //直至计算完成
+ * the computation.  The result can only be retrieved using method
+ * {@code get} when the computation has completed, blocking if
+ //可以通过cancel方法执行取消操作
+ * necessary until it is ready.  Cancellation is performed by the
+ //额外的方法被提供用于确定这个任务是否正常完成或者取消
+ //一旦一个计算已经完成 这个计算不可能被取消
+ * {@code cancel} method.  Additional methods are provided to
+ * determine if the task completed normally or was cancelled. Once a
+ * computation has completed, the computation cannot be cancelled.
+ //如果你想使用Future用于取消的目的 但是又没有提供一个可用的结果
+ //你可以声明一个Future<?>并且返回null作为这个底层执行任务的结果
+ * If you would like to use a {@code Future} for the sake
+ * of cancellability but not provide a usable result, you can
+ * declare types of the form {@code Future<?>} and
+ * return {@code null} as a result of the underlying task.
+ *
+ //简单的应用(注意如下的类是装配好的)
+ * <p>
+ * <b>Sample Usage</b> (Note that the following classes are all
+ * made-up.)
+ * <pre> {@code
+
+ * interface ArchiveSearcher { String search(String target); }
+ * class App {
+ //线程池的执行方法
+ *   ExecutorService executor = ...
+ *   ArchiveSearcher searcher = ...
+ *
+  void showSearch(final String target)
+ *       throws InterruptedException {
+ *
+      Future<String> future
+         //submit接收一个Callable是返回结果的
+         //Runnable是不返回值的
+ *       = executor.submit(new Callable<String>() {
+
+ *         public String call() {
+ *             return searcher.search(target);
+ *         }}
+ );
+ *
+  //上述的搜索是异步操作
+  displayOtherThings(); // do other things while searching
+ *
+      try {
+ *
+    //future.get()获取future的执行记过
+    displayText(future.get()); // use future
+ *
+    } catch (ExecutionException ex) { cleanup(); return; }
+ *   }
+ * }}
+
+
+
+ //FutureTask这个类是Future的实现了Future
+ //通过实现Runnable接口
+ //声明如下:
+
+
+/**
+
+
+ //取消异步的计算
+ * A cancellable asynchronous computation.  This class provides a base
+ * implementation of {@link Future}, with methods to start and cancel
+ * a computation, query to see if the computation is complete, and
+ * retrieve the result of the computation.  The result can only be
+ * retrieved when the computation has completed; the {@code get}
+ * methods will block if the computation has not yet completed.  Once
+ * the computation has completed, the computation cannot be restarted
+ * or cancelled (unless the computation is invoked using
+ * {@link #runAndReset}).
+ *
+ * <p>A {@code FutureTask} can be used to wrap a {@link Callable} or
+ * {@link Runnable} object.  Because {@code FutureTask} implements
+ * {@code Runnable}, a {@code FutureTask} can be submitted to an
+ * {@link Executor} for execution.
+ *
+ * <p>In addition to serving as a standalone class, this class provides
+ * {@code protected} functionality that may be useful when creating
+ * customized task classes.
+ *
+ * @since 1.5
+ * @author Doug Lea
+ * @param <V> The result type returned by this FutureTask's {@code get} methods
+ */
+public class FutureTask<V> implements RunnableFuture<V>
+ ->
+ /**
+  * A {@link Future} that is {@link Runnable}. Successful execution of
+  * the {@code run} method causes completion of the {@code Future}
+  * and allows access to its results.
+  * @see FutureTask
+  * @see Executor
+  * @since 1.6
+  * @author Doug Lea
+  * @param <V> The result type returned by this Future's {@code get} method
+  */
+ public interface RunnableFuture<V> extends Runnable, Future<V> {
+     /**
+      * Sets this Future to the result of its computation
+      * unless it has been cancelled.
+      */
+     void run();
+ }
+
+
+
+ </pre>
+ *
+ //可以通过Executor执行
+
+ * The {@link FutureTask} class is an implementation of {@code Future} that
+ * implements {@code Runnable}, and so may be executed by an {@code Executor}.
+ * For example, the above construction with {@code submit} could be replaced by:
+ *  <pre> {@code
+
+ * FutureTask<String> future =
+ *   new FutureTask<String>(
+     new Callable<String>() {
+ *     public String call() {
+ *       return searcher.search(target);
+ *   }}
+ );
+
+ * executor.execute(future);}</pre>
+ *
+ //内存一致性的影响
+ //异步计算动作一定是发生在另一个线程中Future.get()方法之前
+ * <p>Memory consistency effects: Actions taken by the asynchronous computation
+ * <a href="package-summary.html#MemoryVisibility"> <i>happen-before</i></a>
+ * actions following the corresponding {@code Future.get()} in another thread.
+ *
+ * @see FutureTask
+ * @see Executor
+ * @since 1.5
+ * @author Doug Lea
+ * @param <V> The result type returned by this Future's {@code get} method
+ */
+public interface Future<V> {
+
+    /**
+      //尝试取消任务的执行 这个尝试在任务已经完成 已经取消或者因为某些原因
+      //不能被取消将会失败 如果成功并且在cancel方法被调用的时候 这个任务还没有被执行
+      //这个任务将不会运行
+      //如果这个任务已经启动了 这个mayInterruptIfRunning中断运行参数将确定是否
+      //这个线程在执行这个任务应该在尝试停止任务的时候应该被中断
+     * Attempts to cancel execution of this task.  This attempt will
+     * fail if the task has already completed, has already been cancelled,
+     * or could not be cancelled for some other reason. If successful,
+     * and this task has not started when {@code cancel} is called,
+     * this task should never run.  If the task has already started,
+     * then the {@code mayInterruptIfRunning} parameter determines
+     * whether the thread executing this task should be interrupted in
+     * an attempt to stop the task.
+     *
+     //当这个方法返回 串行调用isDone方法将返回一个true 串行调用isCancelled将总是返回true
+     * <p>After this method returns, subsequent calls to {@link #isDone} will
+     * always return {@code true}.  Subsequent calls to {@link #isCancelled}
+     * will always return {@code true} if this method returned {@code true}.
+     *
+     //mayInterruptIfRunning如果线程执行应该被终止这个值是true 然而运行中的任务被允许完成
+     //如果这个任务不可以被取消的话将会返回false   典型的因为任务已经正常完成了
+     * @param mayInterruptIfRunning {@code true} if the thread executing this
+     * task should be interrupted; otherwise, in-progress tasks are allowed
+     * to complete
+     * @return {@code false} if the task could not be cancelled,
+     * typically because it has already completed normally;
+     * {@code true} otherwise
+     */
+    boolean cancel(boolean mayInterruptIfRunning);
+
+    /**
+     //如果这个任务在正常完成之前被取消将返回true
+     * Returns {@code true} if this task was cancelled before it completed
+     * normally.
+     *//如果这个任务完成之前已经被取消将返回true
+     * @return {@code true} if this task was cancelled before it completed
+     */
+    boolean isCancelled();
+
+    /**
+    //任务已经完成将返回true
+     * Returns {@code true} if this task completed.
+     *//计算可能因为正常的终止 异常或者取消 在以上的情况下这个方法将返回true
+     * Completion may be due to normal termination, an exception, or
+     * cancellation -- in all of these cases, this method will return
+     * {@code true}.
+     *
+     * @return {@code true} if this task completed
+     */
+    boolean isDone();
+
+    /**
+     //获取执行的结果
+     //如果必要的话等待并获取执行的结果
+     * Waits if necessary for the computation to complete, and then
+     * retrieves its result.
+     *
+     * @return the computed result
+     * @throws CancellationException if the computation was cancelled
+     * @throws ExecutionException if the computation threw an
+     * exception
+     * @throws InterruptedException if the current thread was interrupted
+     * while waiting
+     */
+    V get() throws InterruptedException, ExecutionException;
+
+    /**
+    //等待给定的时间 并尝试获取执行结果
+     * Waits if necessary for at most the given time for the computation
+     * to complete, and then retrieves its result, if available.
+     *
+     * @param timeout the maximum time to wait
+     * @param unit the time unit of the timeout argument
+     * @return the computed result
+     * @throws CancellationException if the computation was cancelled
+     * @throws ExecutionException if the computation threw an
+     * exception
+     * @throws InterruptedException if the current thread was interrupted
+     * while waiting
+     * @throws TimeoutException if the wait timed out
+     */
+     //获取执行的结果 并指定好超时的时间
+    V get(long timeout, TimeUnit unit)
+        throws InterruptedException, ExecutionException, TimeoutException;
+}
+
+
+->Netty Futrue
+/*
+ * Copyright 2013 The Netty Project
+ *
+ * The Netty Project licenses this file to you under the Apache License,
+ * version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at:
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+package io.netty.util.concurrent;
+
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.TimeUnit;
+
+
+/**
+//异步操作的结果
+ * The result of an asynchronous operation.
+ */
+@SuppressWarnings("ClassNameSameAsAncestorName")
+public interface Future<V> extends java.util.concurrent.Future<V> {
+
+
+//如果仅仅因为IO操作完成将返回true
+    /**
+     * Returns {@code true} if and only if the I/O operation was completed
+     * successfully.
+     */
+    boolean isSuccess();
+
+    /**
+     * returns {@code true} if and only if the operation can be cancelled via {@link #cancel(boolean)}.
+     */
+    boolean isCancellable();
+
+    /**
+     * Returns the cause of the failed I/O operation if the I/O operation has
+     * failed.
+     *
+     * @return the cause of the failure.
+     *         {@code null} if succeeded or this future is not
+     *         completed yet.
+     */
+    Throwable cause();
+
+
+    //向Future添加执行的Future
+    //当Future isDone的时候将会收到通知
+    //如果Future已经完成这个指定的Listener将立即通知
+    //观察者模式在这里会使用
+    /**
+     * Adds the specified listener to this future.  The
+     * specified listener is notified when this future is
+     * {@linkplain #isDone() done}.  If this future is already
+     * completed, the specified listener is notified immediately.
+     */
+
+     ->{
+     /**监听Listener的返回结果
+      * Listens to the result of a {@link Future}.
+      //结果会被一步的通知给Listener
+       The result of the asynchronous operation is notified once this listener
+      * is added by calling {@link Future#addListener(GenericFutureListener)}.
+      */
+     public interface GenericFutureListener<F extends Future<?>> extends EventListener {
+
+         /**
+         //当与Future相关的操作已经完成后将会被调用
+          * Invoked when the operation associated with the {@link Future} has been completed.
+          *
+          * @param future  the source {@link Future} which called this callback
+          */
+         void operationComplete(F future) throws Exception;
+     }
+
+
+     }
+    Future<V> addListener(GenericFutureListener<? extends Future<? super V>> listener);
+
+    /**
+     * Adds the specified listeners to this future.  The
+     * specified listeners are notified when this future is
+     * {@linkplain #isDone() done}.  If this future is already
+     * completed, the specified listeners are notified immediately.
+     */
+    Future<V> addListeners(GenericFutureListener<? extends Future<? super V>>... listeners);
+
+    /**
+     * Removes the first occurrence of the specified listener from this future.
+     * The specified listener is no longer notified when this
+     * future is {@linkplain #isDone() done}.  If the specified
+     * listener is not associated with this future, this method
+     * does nothing and returns silently.
+     */
+    Future<V> removeListener(GenericFutureListener<? extends Future<? super V>> listener);
+
+    /**
+     * Removes the first occurrence for each of the listeners from this future.
+     * The specified listeners are no longer notified when this
+     * future is {@linkplain #isDone() done}.  If the specified
+     * listeners are not associated with this future, this method
+     * does nothing and returns silently.
+     */
+    Future<V> removeListeners(GenericFutureListener<? extends Future<? super V>>... listeners);
+
+    /**
+
+    //等待future直到完成
+    //如果失败将会抛出失败原因
+    //同步
+     * Waits for this future until it is done, and rethrows the cause of the failure if this future
+     * failed.
+     */
+    Future<V> sync() throws InterruptedException;
+
+    /**
+     * Waits for this future until it is done, and rethrows the cause of the failure if this future
+     * failed.
+     */
+    Future<V> syncUninterruptibly();
+
+    /**
+
+    //等待Future完成
+     * Waits for this future to be completed.
+     *
+     * @throws InterruptedException
+     *         if the current thread was interrupted
+     */
+    Future<V> await() throws InterruptedException;
+
+    /**
+     * Waits for this future to be completed without
+     * interruption.  This method catches an {@link InterruptedException} and
+     * discards it silently.
+     */
+    Future<V> awaitUninterruptibly();
+
+    /**
+     * Waits for this future to be completed within the
+     * specified time limit.
+     *
+     * @return {@code true} if and only if the future was completed within
+     *         the specified time limit
+     *
+     * @throws InterruptedException
+     *         if the current thread was interrupted
+     */
+    boolean await(long timeout, TimeUnit unit) throws InterruptedException;
+
+    /**
+     * Waits for this future to be completed within the
+     * specified time limit.
+     *
+     * @return {@code true} if and only if the future was completed within
+     *         the specified time limit
+     *
+     * @throws InterruptedException
+     *         if the current thread was interrupted
+     */
+    boolean await(long timeoutMillis) throws InterruptedException;
+
+    /**
+     * Waits for this future to be completed within the
+     * specified time limit without interruption.  This method catches an
+     * {@link InterruptedException} and discards it silently.
+     *
+     * @return {@code true} if and only if the future was completed within
+     *         the specified time limit
+     */
+    boolean awaitUninterruptibly(long timeout, TimeUnit unit);
+
+    /**
+     * Waits for this future to be completed within the
+     * specified time limit without interruption.  This method catches an
+     * {@link InterruptedException} and discards it silently.
+     *
+     * @return {@code true} if and only if the future was completed within
+     *         the specified time limit
+     */
+    boolean awaitUninterruptibly(long timeoutMillis);
+
+
+     //在不阻塞的情况下返回结果
+     //如果这个future没有done将会返回null
+    /**
+     * Return the result without blocking. If the future is not done yet this will return {@code null}.
+     *
+     //由于一个null值用于标记future成功了
+     //你可以使用isDone检查这个future是不是完成
+     //不依赖与这个返回值是null
+     * As it is possible that a {@code null} value is used to mark the future as successful
+      you also need to check
+     * if the future is really done with {@link #isDone()} and not relay on the returned {@code null} value.
+     */
+    V getNow();
+
+    /**
+     * {@inheritDoc}
+     *
+     * If the cancellation was successful it will fail the future with an {@link CancellationException}.
+     */
+    @Override
+    boolean cancel(boolean mayInterruptIfRunning);
+}
+
+问题:
+Netty为什么会提供一个Future？
+自己的理解:因为Netty是单线程的 针对不同的事件会有相应的处理方式 所以会提供一些额外的方法来监测任务的完成状况
+并提供一些监听的机制来操作不同事件类型的处理操作
+
+->Future.get()是一个阻塞的方法 不清楚什么时候去调用get方法 这是一个问题
+Listener来解决这个问题 更加方便处理Future的返回结果
+提高可用性
+
+->ChannelFuture
+/**
+
+//异步ChannelIO操作的结果:
+ * The result of an asynchronous {@link Channel} I/O operation.
+ * <p>
+ //所有的IO操作都是异步的
+ //它意味着IO操作将在不保证请求的IO操作已经完成的情况得到立即调用
+ //相反 你将通过ChannelFuture对象获取到IO操作的执行结果或者是IO操作的状态
+ * All I/O operations in Netty are asynchronous.  It means any I/O calls will
+ * return immediately with no guarantee that the requested I/O operation has
+ * been completed at the end of the call.  Instead, you will be returned with
+ * a {@link ChannelFuture} instance which gives you the information about the
+ * result or status of the I/O operation.
+ * <p>
+
+ //一个ChannelFuture要么是完成要么是未完成的
+ //当一个IO操作开始 一个新的future对象就会被创建
+ //这个新的future初始的时候是未完成的
+ //它因为IO操作未完成将会失败、成功或者被取消
+ * A {@link ChannelFuture} is either <em>uncompleted</em> or <em>completed</em>.
+ * When an I/O operation begins, a new future object is created.  The new future
+ * is uncompleted initially - it is neither succeeded, failed, nor cancelled
+ //如果IO操作要么完成要么失败要么取消 这个future被作为完成以及更多的特定信息所标识
+ //例如失败的原因
+ //请注意关注失败取消以及完成的状态判断
+ * because the I/O operation is not finished yet.  If the I/O operation is
+ * finished either successfully, with failure, or by cancellation, the future is
+ * marked as completed with more specific information, such as the cause of the
+ * failure.  Please note that even failure and cancellation belong to the
+ * completed state.
+ * <pre>
+ *                                      +---------------------------+
+ *                                      | Completed successfully    |
+ *                                      +---------------------------+
+ *                                 +---->      isDone() = true      |
+ * +--------------------------+    |    |   isSuccess() = true      |
+ * |        Uncompleted       |    |    +===========================+
+ * +--------------------------+    |    | Completed with failure    |
+ * |      isDone() = false    |    |    +---------------------------+
+ * |   isSuccess() = false    |----+---->      isDone() = true      |
+ * | isCancelled() = false    |    |    |       cause() = non-null  |
+ * |       cause() = null     |    |    +===========================+
+ * +--------------------------+    |    | Completed by cancellation |
+ *                                 |    +---------------------------+
+ *                                 +---->      isDone() = true      |
+ *                                      | isCancelled() = true      |
+ *                                      +---------------------------+
+ * </pre>
+ *
+
+ // 大量的方法被提供用于判断IO操作的失败 等待完成及获取返回结果
+ // 它也允许你添加Listener来获取IO操作完成时候的通知
+ * Various methods are provided to let you check if the I/O operation has been
+ * completed, wait for the completion, and retrieve the result of the I/O
+ * operation. It also allows you to add {@link ChannelFutureListener}s so you
+ * can get notified when the I/O operation is completed.
+ *
+
+
+ * <h3>Prefer {@link #addListener(GenericFutureListener)} to {@link #await()}</h3>
+
+ //推荐使用addListener不建议使用await
+ 在任何情况下都是如此 在IO操作完成的时候可以获取通知并可以做一些后续的处理
+ *
+ * It is recommended to prefer {@link #addListener(GenericFutureListener)} to
+ * {@link #await()} wherever possible to get notified when an I/O operation is
+ * done and to do any follow-up tasks.
+ * <p>
+
+ //addListener(GenericFutureListener)是非阻塞的 简化了添加ChannelFutureListener到
+ //ChannelFuture以及当与future绑定的IO操作已经完成了将会通知对应的监听listener
+ * {@link #addListener(GenericFutureListener)} is non-blocking.  It simply adds
+ * the specified {@link ChannelFutureListener} to the {@link ChannelFuture}, and
+ * I/O thread will notify the listeners when the I/O operation associated with
+ * the future is done.
+ //ChannelFutureListener 产生一个很好的性能和资源的利用 如果你不了解事件驱动模型的话
+ 可能实现一个串行的逻辑是一个棘手的问题
+ {@link ChannelFutureListener} yields[生产 产生] the best
+ * performance and resource utilization because it does not block at all, but
+ * it could be tricky to implement a sequential logic if you are not used to
+ * event-driven programming.
+ * <p>
+
+ //相反await是阻塞的 成本是比较大的 而且某些情况下会产生死锁
+ * By contrast, {@link #await()} is a blocking operation.  Once called, the
+ * caller thread blocks until the operation is done.  It is easier to implement
+ * a sequential logic with {@link #await()}, but the caller thread blocks
+ * unnecessarily until the I/O operation is done and there's relatively
+ * expensive cost of inter-thread notification.  Moreover, there's a chance of
+ * dead lock in a particular circumstance, which is described below.
+ *
+ * <h3>Do not call {@link #await()} inside {@link ChannelHandler}</h3>
+ * <p>
+ * The event handler methods in {@link ChannelHandler} are usually called by
+ * an I/O thread.  If {@link #await()} is called by an event handler
+ * method, which is called by the I/O thread, the I/O operation it is waiting
+ * for might never complete because {@link #await()} can block the I/O
+ * operation it is waiting for, which is a dead lock.
+ * <pre>
+ * // BAD - NEVER DO THIS
+ * {@code @Override}
+ * public void channelRead({@link ChannelHandlerContext} ctx, Object msg) {
+ *     {@link ChannelFuture} future = ctx.channel().close();
+ *     future.awaitUninterruptibly();
+ *     // Perform post-closure operation
+ *     // ...
+ * }
+ *
+ * // GOOD
+ * {@code @Override}
+ * public void channelRead({@link ChannelHandlerContext} ctx, Object msg) {
+ *     {@link ChannelFuture} future = ctx.channel().close();
+ *     future.addListener(new {@link ChannelFutureListener}() {
+ *         public void operationComplete({@link ChannelFuture} future) {
+ *             // Perform post-closure operation
+ *             // ...
+ *         }
+ *     });
+ * }
+ * </pre>
+ * <p>
+ * In spite of the disadvantages mentioned above, there are certainly the cases
+ * where it is more convenient to call {@link #await()}. In such a case, please
+ * make sure you do not call {@link #await()} in an I/O thread.  Otherwise,
+ * {@link BlockingOperationException} will be raised to prevent a dead lock.
+ *
+ * <h3>Do not confuse I/O timeout and await timeout</h3>
+ *
+ * The timeout value you specify with {@link #await(long)},
+ * {@link #await(long, TimeUnit)}, {@link #awaitUninterruptibly(long)}, or
+ * {@link #awaitUninterruptibly(long, TimeUnit)} are not related with I/O
+ * timeout at all.  If an I/O operation times out, the future will be marked as
+ * 'completed with failure,' as depicted in the diagram above.  For example,
+ * connect timeout should be configured via a transport-specific option:
+ * <pre>
+ * // BAD - NEVER DO THIS
+ * {@link Bootstrap} b = ...;
+ * {@link ChannelFuture} f = b.connect(...);
+ * f.awaitUninterruptibly(10, TimeUnit.SECONDS);
+ * if (f.isCancelled()) {
+ *     // Connection attempt cancelled by user
+ * } else if (!f.isSuccess()) {
+ *     // You might get a NullPointerException here because the future
+ *     // might not be completed yet.
+ *     f.cause().printStackTrace();
+ * } else {
+ *     // Connection established successfully
+ * }
+ *
+ * // GOOD
+ * {@link Bootstrap} b = ...;
+ * // Configure the connect timeout option.
+ * <b>b.option({@link ChannelOption}.CONNECT_TIMEOUT_MILLIS, 10000);</b>
+ * {@link ChannelFuture} f = b.connect(...);
+ * f.awaitUninterruptibly();
+ *
+ * // Now we are sure the future is completed.
+ * assert f.isDone();
+ *
+ * if (f.isCancelled()) {
+ *     // Connection attempt cancelled by user
+ * } else if (!f.isSuccess()) {
+ *     f.cause().printStackTrace();
+ * } else {
+ *     // Connection established successfully
+ * }
+ * </pre>
+ */
+public interface ChannelFuture extends Future<Void> {
+
+    /**
+     * Returns a channel where the I/O operation associated with this
+     * future takes place.
+     */
+    Channel channel();
+
+    @Override
+    ChannelFuture addListener(GenericFutureListener<? extends Future<? super Void>> listener);
+
+    @Override
+    ChannelFuture addListeners(GenericFutureListener<? extends Future<? super Void>>... listeners);
+
+    @Override
+    ChannelFuture removeListener(GenericFutureListener<? extends Future<? super Void>> listener);
+
+    @Override
+    ChannelFuture removeListeners(GenericFutureListener<? extends Future<? super Void>>... listeners);
+
+    @Override
+    ChannelFuture sync() throws InterruptedException;
+
+    @Override
+    ChannelFuture syncUninterruptibly();
+
+    @Override
+    ChannelFuture await() throws InterruptedException;
+
+    @Override
+    ChannelFuture awaitUninterruptibly();
+
+    /**
+     * Returns {@code true} if this {@link ChannelFuture} is a void future and so not allow to call any of the
+     * following methods:
+     * <ul>
+     *     <li>{@link #addListener(GenericFutureListener)}</li>
+     *     <li>{@link #addListeners(GenericFutureListener[])}</li>
+     *     <li>{@link #await()}</li>
+     *     <li>{@link #await(long, TimeUnit)} ()}</li>
+     *     <li>{@link #await(long)} ()}</li>
+     *     <li>{@link #awaitUninterruptibly()}</li>
+     *     <li>{@link #sync()}</li>
+     *     <li>{@link #syncUninterruptibly()}</li>
+     * </ul>
+     */
+    boolean isVoid();
+}
